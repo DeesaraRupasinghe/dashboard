@@ -66,6 +66,38 @@ public class ChartController {
         return response;
     }
 
+    @GetMapping("/combined-columns")
+    public Map<String, Object> getCombinedChart() {
+    
+        Map<String, Object> response = new HashMap<>();
+        try {
+            String xSql = "SELECT order_date FROM orders ORDER BY order_date";
+            String ySql = "SELECT amount FROM sales ORDER BY date";
+    
+            List<Map<String, Object>> xData = jdbcTemplate.queryForList(xSql);
+            List<Map<String, Object>> yData = jdbcTemplate.queryForList(ySql);
+    
+            List<String> labels = new ArrayList<>();
+            List<Number> values = new ArrayList<>();
+    
+            int count = Math.min(xData.size(), yData.size());
+    
+            for (int i = 0; i < count; i++) {
+                labels.add(xData.get(i).get("order_date").toString());
+                values.add(Double.parseDouble(yData.get(i).get("amount").toString()));
+            }
+    
+            response.put("labels", labels);
+            response.put("data", values);
+            return response;
+    
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Failed to build combined chart: " + e.getMessage());
+        }
+    }
+    
+    
 
 
     @GetMapping("/{chartId}")
@@ -90,5 +122,24 @@ public class ChartController {
 
         return response;
     }
+
+    @PostMapping("/create-config")
+    public String createChartConfig(@RequestBody Map<String, String> payload) {
+        String chartName = payload.get("chart_name");
+        String tableName = payload.get("table_name");
+        String xAxis = payload.get("x_axis");
+        String yAxis = payload.get("y_axis");
+        String chartType = payload.get("chart_type");
+
+        String sql = "INSERT INTO chart_config (chart_name, table_name, x_axis, y_axis, chart_type) VALUES (?, ?, ?, ?, ?)";
+        int rows = jdbcTemplate.update(sql, chartName, tableName, xAxis, yAxis, chartType);
+
+        if (rows > 0) {
+            return "Chart config created successfully.";
+        } else {
+            throw new RuntimeException("Failed to create chart config.");
+        }
+    }
+
 }
 
