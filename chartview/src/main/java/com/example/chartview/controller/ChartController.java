@@ -14,13 +14,12 @@ public class ChartController {
     private JdbcTemplate jdbcTemplate;
 
     @GetMapping("/test")
-        public String testEndpoint() {
+    public String testEndpoint() {
         return "API working!";
     }
 
     @GetMapping("/multi-line")
-    public Map<String, Object> getMultiTableChart(
-            @RequestParam List<Integer> chartIds) {
+    public Map<String, Object> getMultiTableChart(@RequestParam List<Integer> chartIds) {
 
         List<Map<String, Object>> datasets = new ArrayList<>();
         String xAxisCommon = "";
@@ -68,40 +67,40 @@ public class ChartController {
 
     @GetMapping("/combined-columns")
     public Map<String, Object> getCombinedChart() {
-    
         Map<String, Object> response = new HashMap<>();
         try {
             String xSql = "SELECT order_date FROM orders ORDER BY order_date";
             String ySql = "SELECT amount FROM sales ORDER BY date";
-    
+
             List<Map<String, Object>> xData = jdbcTemplate.queryForList(xSql);
             List<Map<String, Object>> yData = jdbcTemplate.queryForList(ySql);
-    
+
             List<String> labels = new ArrayList<>();
             List<Number> values = new ArrayList<>();
-    
+
             int count = Math.min(xData.size(), yData.size());
-    
+
             for (int i = 0; i < count; i++) {
                 labels.add(xData.get(i).get("order_date").toString());
                 values.add(Double.parseDouble(yData.get(i).get("amount").toString()));
             }
-    
+
             response.put("labels", labels);
             response.put("data", values);
             return response;
-    
+
         } catch (Exception e) {
             e.printStackTrace();
             throw new RuntimeException("Failed to build combined chart: " + e.getMessage());
         }
     }
-    
-    
-
 
     @GetMapping("/{chartId}")
-    public Map<String, Object> getChartData(@PathVariable int chartId) {
+    public Map<String, Object> getChartData(
+            @PathVariable int chartId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
         String configSql = "SELECT * FROM chart_config WHERE id = ?";
         Map<String, Object> config = jdbcTemplate.queryForMap(configSql, chartId);
 
@@ -110,8 +109,25 @@ public class ChartController {
         String yAxis = config.get("y_axis").toString();
         String chartType = config.get("chart_type").toString();
 
-        String dataSql = String.format("SELECT %s, %s FROM %s ORDER BY %s", xAxis, yAxis, tableName, xAxis);
-        List<Map<String, Object>> data = jdbcTemplate.queryForList(dataSql);
+        StringBuilder dataSql = new StringBuilder(String.format("SELECT %s, %s FROM %s WHERE 1=1", xAxis, yAxis, tableName));
+        List<Object> params = new ArrayList<>();
+
+        if (startDate != null) {
+            dataSql.append(" AND ").append(xAxis).append(" >= ?");
+            params.add(startDate);
+        }
+        if (endDate != null) {
+            dataSql.append(" AND ").append(xAxis).append(" <= ?");
+            params.add(endDate);
+        }
+
+        dataSql.append(" ORDER BY ").append(xAxis);
+
+        // Debug SQL output
+        System.out.println("Generated SQL: " + dataSql);
+        System.out.println("Params: " + params);
+
+        List<Map<String, Object>> data = jdbcTemplate.queryForList(dataSql.toString(), params.toArray());
 
         Map<String, Object> response = new HashMap<>();
         response.put("chartName", config.get("chart_name"));
@@ -140,6 +156,4 @@ public class ChartController {
             throw new RuntimeException("Failed to create chart config.");
         }
     }
-
 }
-
